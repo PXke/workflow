@@ -48,8 +48,8 @@ tests_require = [
     'pytest-cache>=1.0',
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
+    'mock>=1.3.1',
     'pytest>=2.6.1',
-    'mock=>1.3.1',
     'blinker==1.3',
 ]
 
