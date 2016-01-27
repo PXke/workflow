@@ -200,6 +200,7 @@ class DbTransitionAction(TransitionActions):
         message = "Workflow '%s' halted at task %s with message: %s" % \
                     (eng.name, eng.current_taskname or "Unknown", e.message)
         eng.log.warning(message)
+        eng.db.session.commit()
         super(DbTransitionAction, DbTransitionAction).HaltProcessing(obj, eng, callbacks, exc_info)
 
 
@@ -215,6 +216,7 @@ class DbTransitionAction(TransitionActions):
             obj.save(status=obj.known_statuses.ERROR, callback_pos=eng.state.callback_pos,
                      id_workflow=eng.uuid)
         eng.save(WorkflowStatus.ERROR)
+        eng.db.session.commit()
         try:
             super(DbTransitionAction, DbTransitionAction).Exception(obj, eng, callbacks, exc_info)
         except Exception:
@@ -223,6 +225,7 @@ class DbTransitionAction(TransitionActions):
         # Change the type of the Exception to WorkflowError, but use its tb
         reraise(WorkflowError(message=exception_repr, id_workflow=eng.uuid,
                               id_object=eng.state.token_pos), None, exc_info[2])
+
 
 
 class DbProcessingFactory(ProcessingFactory):
@@ -259,3 +262,4 @@ class DbProcessingFactory(ProcessingFactory):
             eng.save(WorkflowStatus.COMPLETED)
         else:
             eng.save(WorkflowStatus.HALTED)
+        eng.db.session.commit()
