@@ -246,8 +246,6 @@ def FOR(get_list_function, setter, branch, cache_data=False, order="ASC"):
     :param get_list_function: function returning the list on which we should
     iterate.
     :param branch: block of functions to run
-    :param savename: name of variable to save the current loop state in the
-    extra_data in case you want to reuse the value somewhere in a task.
     :param cache_data: can be True or False in case of True, the list will be
     cached in memory instead of being recomputed everytime. In case of caching
     the list is no more dynamic.
@@ -257,8 +255,6 @@ def FOR(get_list_function, setter, branch, cache_data=False, order="ASC"):
     :param setter: function to call in order to save the current item of the
     list that is being iterated over.
     expected to take arguments (obj, eng, val)
-    :param getter: function to call in order to retrieve the current item of
-    the list that is being iterated over. expected to take arguments(obj, eng)
     """
     # be sane
     assert order in ('ASC', 'DSC')
@@ -281,49 +277,56 @@ def FOR(get_list_function, setter, branch, cache_data=False, order="ASC"):
                 return eng.extra_data["_Iterators"][step]["cache"]
             except KeyError:
                 if callable(get_list_function):
-                    return get_list()
+                    return get_list_function()
                 elif isinstance(get_list_function, collections.Iterable):
                     return list(get_list_function)
                 else:
-                    raise TypeError("get_list_function is not a callable nor a"
-                                    " iterable")
+                    raise TypeError("get_list_function is not callable nor an"
+                                    " iterable.")
 
-        my_list_to_process = get_list()
+        list_to_process = get_list()
 
         # First time we are in this step
         if step not in eng.extra_data["_Iterators"]:
             eng.extra_data["_Iterators"][step] = {}
             # Cache list
             if cache_data:
-                eng.extra_data["_Iterators"][step]["cache"] = get_list()
+                eng.extra_data["_Iterators"][step]["cache"] = list_to_process
             # Initialize step value
             eng.extra_data["_Iterators"][step]["value"] = {
                 "ASC": 0,
-                "DSC": len(my_list_to_process) - 1}[order]
+                "DSC": len(list_to_process) - 1}[order]
             # Store previous data
-            if 'current_data' in eng.extra_data["_Iterators"][step]:
-                eng.extra_data["_Iterators"][step]["previous_data"] = \
-                    eng.extra_data["_Iterators"][step]["current_data"]
+
+        elif 'current_data' in eng.extra_data["_Iterators"][step]:
+            eng.extra_data["_Iterators"][step]["previous_data"] = \
+                eng.extra_data["_Iterators"][step]["current_data"]
 
         # Increment or decrement step value
         step_value = eng.extra_data["_Iterators"][step]["value"]
         currently_within_list_bounds = \
-            (order == "ASC" and step_value < len(my_list_to_process)) or \
+            (order == "ASC" and step_value < len(list_to_process)) or \
             (order == "DSC" and step_value > -1)
         if currently_within_list_bounds:
             # Store current data for ourselves
             eng.extra_data["_Iterators"][step]["current_data"] = \
-                my_list_to_process[step_value]
+                list_to_process[step_value]
             # Store for the user
             if setter:
-                setter(obj, eng, step, my_list_to_process[step_value])
+                setter(obj, eng, step, list_to_process[step_value])
             if order == 'ASC':
                 eng.extra_data["_Iterators"][step]["value"] += 1
             elif order == 'DSC':
                 eng.extra_data["_Iterators"][step]["value"] -= 1
         else:
-            setter(obj, eng, step,
-                   eng.extra_data["_Iterators"][step]["previous_data"])
+            # Special case were no iteration is needed.
+            if "previous_data" in eng.extra_data["_Iterators"][step]:
+                setter(obj, eng, step,
+                       eng.extra_data["_Iterators"][step]["previous_data"])
+            else:
+                # We set None as no value should have been generated if
+                # no iteration has been done.
+                setter(obj, eng, step, None)
             del eng.extra_data["_Iterators"][step]
             eng.breakFromThisLoop()
 

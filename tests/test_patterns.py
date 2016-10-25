@@ -11,6 +11,7 @@ import sys
 import os
 import time
 import random
+import pytest
 
 p = os.path.abspath(os.path.dirname(__file__) + '/../')
 if p not in sys.path:
@@ -472,3 +473,61 @@ class TestGenericWorkflowEngine(object):
         assert d.count('bum') == 2
         assert 'end' in d
         assert 'eng-end' not in d  # it must not be present if reinit=True
+
+    # ------------------- testing for -----------------------------
+    def test_FOR01(self):
+        """Test FOR pattern with different options"""
+        we = GenericWorkflowEngine()
+        doc = [[], []]
+
+        # We check normal workflow appending 50 times pony to a list.
+        # This test will check multiple object processing with for loop.
+        we.setWorkflow([cf.FOR(range(0, 50), "_loops", [a("pony")])])
+        we.process(doc)
+        # First object has been correctly processed.
+        assert len(doc[0]) == 50
+        # Second object has been correctly processed.
+        assert len(doc[1]) == 50
+        # We have done the correct number of iterations last expected
+        # value is 49. (From 0 to 49).
+        assert we.extra_data["_loops"] == 49
+
+        # He we do a special case where there is no iteration to do.
+        doc = [[], []]
+        we.setWorkflow([cf.FOR(range(0, 0), "_loops", [a("pony")])])
+        we.process(doc)
+        # First object has been correctly no processed.
+        assert len(doc[0]) == 0
+        # Second object has been correctly no processed.
+        assert len(doc[1]) == 0
+        # range will generate empty list so no object should be processed.
+        assert we.extra_data["_loops"] is None
+
+        def generate_task_list(obj, eng):
+            return [obj.append("pony")]
+
+        def generate_interval():
+            return range(0, 50)
+
+        # Same first check but with reverse order and cached list and
+        # callable branch.
+        doc = [[], []]
+        we.setWorkflow([cf.FOR(generate_interval, "_loops",
+                               generate_task_list, True, "DSC")])
+        we.process(doc)
+        # First object has been correctly processed.
+        assert len(doc[0]) == 50
+        # Second object has been correctly processed.
+        assert len(doc[1]) == 50
+        # We have done the correct number of iterations last expected
+        # value is 0. (From 49 to 0).
+        assert we.extra_data["_loops"] == 0
+
+        # We check that if the parameter we will iterate over is wrong
+        # we raise and exception.
+        with pytest.raises(TypeError):
+            doc = [[], []]
+            we = GenericWorkflowEngine()
+            # 1 is not iterable and not callable.
+            we.setWorkflow([1, "_loops", [a("pony")]])
+            we.process(doc)
