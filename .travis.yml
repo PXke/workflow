@@ -1,5 +1,5 @@
 # This file is part of Workflow.
-# Copyright (C) 2014 CERN.
+# Copyright (C) 2014, 2017 CERN.
 #
 # Workflow is free software; you can redistribute it and/or modify it
 # under the terms of the Revised BSD License; see LICENSE file for
@@ -8,10 +8,8 @@
 language: python
 
 python:
-  - "2.6"
   - "2.7"
-  - "3.3"
-  - "3.4"
+  - "3.6"
 
 install:
   - pip install --upgrade pip
@@ -28,3 +26,12 @@ after_success:
 
 notifications:
   email: false
+
+deploy:
+  provider: pypi
+  user: inveniosoftware
+  password:
+    secure: "VuWcET8lKaHnQJ/6i7ryV5F1YqegOQEvmxSe8ph8s5waowxPtnroDCtegCSOYR3865cB37UoE5hqb1DJmEQ8tuII6dGP0vG8FZJ365N1d1nH87XHFJnplCmAQyLGGMGZnw8+XV17KpzsyBR8v+n8RvY909tQd/i0Rsyrp+5/OlA="
+  distributions: "sdist bdist_wheel"
+  on:
+    python: "2.7"

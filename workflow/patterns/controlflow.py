@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Workflow.
-# Copyright (C) 2011, 2014, 2015, 2016 CERN.
+# Copyright (C) 2011, 2014, 2015, 2016, 2017 CERN.
 #
 # Workflow is free software; you can redistribute it and/or modify it
 # under the terms of the Revised BSD License; see LICENSE file for
@@ -15,42 +15,46 @@ See http://www.yawlfoundation.org/pages/resources/patterns.html#basic
 import threading
 import time
 import collections
-
 from functools import wraps, partial
 
 from six.moves import _thread as thread, queue
 from six import string_types
 
+from .utils import with_nice_docs
 from ..engine import Callbacks
+
 
 MAX_TIMEOUT = 30000
 
 
+@with_nice_docs
 def TASK_JUMP_BWD(step=-1):
-    """Jump to the previous task - eng.jumpCallBack.
+    """Jump to the previous task - eng.jump_call.
 
     Example: A, B, TASK_JUMP_FWD(-2), C, D, ...
     will produce: A, B, A, B, A, B, ... (recursion!)
     :param step: int, must not be positive number
     """
     def _move_back(obj, eng):
-        eng.jumpCallBack(step)
+        eng.jump_call(step)
     _move_back.__name__ = 'TASK_JUMP_BWD'
     return _move_back
 
 
+@with_nice_docs
 def TASK_JUMP_FWD(step=1):
-    """Jump to the next task - eng.jumpCallForward()
+    """Jump to the next task - eng.jump_call()
     example: A, B, TASK_JUMP_FWD(2), C, D, ...
     will produce: A, B, D
     :param step: int
     """
     def _x(obj, eng):
-        eng.jumpCallForward(step)
+        eng.jump_call(step)
     _x.__name__ = 'TASK_JUMP_FWD'
     return _x
 
 
+@with_nice_docs
 def TASK_JUMP_IF(cond, step):
     """Jump in the specified direction if the condition
     evaluates to True, the difference from other IF conditions
@@ -58,28 +62,25 @@ def TASK_JUMP_IF(cond, step):
     :param cond: function
     :param step: int, negative jumps back, positive forward
     """
-    def minus(obj, eng):
-        return cond(obj, eng) and eng.jumpCallBack(step)
+    def jump(obj, eng):
+        return cond(obj, eng) and eng.jump_call(step)
 
-    def plus(obj, eng):
-        return cond(obj, eng) and eng.jumpCallForward(step)
-    if int(step) < 0:
-        return minus
-    else:
-        return plus
+    return jump
 
 
+@with_nice_docs
 def BREAK():
     """Stop execution of the current block while keeping workflow running.
 
-    Usage: ``eng.breakFromThisLoop()``.
+    Usage: ``eng.break_current_loop()``.
     """
     def x(obj, eng):
-        eng.breakFromThisLoop()
+        eng.break_current_loop()
     x.__name__ = 'BREAK'
     return x
 
 
+@with_nice_docs
 def STOP():
     """Unconditional stop of the workflow execution."""
     def x(obj, eng):
@@ -88,6 +89,7 @@ def STOP():
     return x
 
 
+@with_nice_docs
 def HALT():
     """Unconditional stop of the workflow execution."""
     def x(obj, eng):
@@ -96,15 +98,17 @@ def HALT():
     return x
 
 
+@with_nice_docs
 def OBJ_NEXT():
     """Stop the workflow execution for the current object and start
-    the same worfklow for the next object - eng.continueNextToken()."""
+    the same worfklow for the next object - eng.break_current_loop()."""
     def x(obj, eng):
-        eng.continueNextToken()
+        eng.break_current_loop()
     x.__name__ = 'OBJ_NEXT'
     return x
 
 
+@with_nice_docs
 def OBJ_JUMP_FWD(step=1):
     """Stop the workflow execution, jumps to xth consecutive object
     and starts executing the workflow on it - eng.jumpTokenForward()
@@ -117,6 +121,7 @@ def OBJ_JUMP_FWD(step=1):
     return x
 
 
+@with_nice_docs
 def OBJ_JUMP_BWD(step=-1):
     """Stop the workflow execution, jumps to xth antecedent object
     and starts executing the workflow on it - eng.jumpTokenForward()
@@ -131,6 +136,7 @@ def OBJ_JUMP_BWD(step=-1):
 # ------------------------- some conditions --------------------------------- #
 
 
+@with_nice_docs
 def IF(cond, branch):
     """Implement condition, if cond evaluates to True branch is executed.
 
@@ -141,12 +147,13 @@ def IF(cond, branch):
                 limited only inside the branch
     """
     def _x(obj, eng):
-        return cond(obj, eng) and eng.jumpCallForward(1) \
-            or eng.breakFromThisLoop()
+        return cond(obj, eng) and eng.jump_call(1) \
+            or eng.break_current_loop()
     _x.__name__ = 'IF'
     return [_x, branch]
 
 
+@with_nice_docs
 def IF_NOT(cond, branch):
     """Implements condition, if cond evaluates to False
     branch is executed
@@ -158,12 +165,13 @@ def IF_NOT(cond, branch):
     """
     def _x(obj, eng):
         if cond(obj, eng):
-            eng.breakFromThisLoop()
+            eng.break_current_loop()
         return 1
     _x.__name__ = 'IF_NOT'
     return [_x, branch]
 
 
+@with_nice_docs
 def IF_ELSE(cond, branch1, branch2):
     """Implements condition, if cond evaluates to True
     branch1 is executed, otherwise branch2
@@ -178,12 +186,13 @@ def IF_ELSE(cond, branch1, branch2):
         raise Exception("Neither of the branches can be None/empty")
 
     def _x(obj, eng):
-        return cond(obj, eng) and eng.jumpCallForward(1) \
-            or eng.jumpCallForward(3)
+        return cond(obj, eng) and eng.jump_call(1) \
+            or eng.jump_call(3)
     _x.__name__ = 'IF_ELSE'
     return [_x, branch1, BREAK(), branch2]
 
 
+@with_nice_docs
 def WHILE(cond, branch):
     """Keeps executing branch as long as the condition cond is True
     :param cond: callable, function that decides
@@ -197,11 +206,12 @@ def WHILE(cond, branch):
 
     def _x(obj, eng):
         if not cond(obj, eng):
-            eng.breakFromThisLoop()
+            eng.break_current_loop()
     _x.__name__ = 'WHILE'
     return [_x, branch, TASK_JUMP_BWD(-(len(branch) + 1))]
 
 
+@with_nice_docs
 def CMP(a, b, op):
     """Task that can be used in if or something else to compare two values.
 
@@ -241,6 +251,7 @@ def _setter(key, obj, eng, step, val):
     eng.extra_data[key] = val
 
 
+@with_nice_docs
 def FOR(get_list_function, setter, branch, cache_data=False, order="ASC"):
     """For loop that stores the current item.
     :param get_list_function: function returning the list on which we should
@@ -328,12 +339,13 @@ def FOR(get_list_function, setter, branch, cache_data=False, order="ASC"):
                 # no iteration has been done.
                 setter(obj, eng, step, None)
             del eng.extra_data["_Iterators"][step]
-            eng.breakFromThisLoop()
+            eng.break_current_loop()
 
     _for.__name__ = 'FOR'
     return [_for, branch, TASK_JUMP_BWD(-(len(branch) + 1))]
 
 
+@with_nice_docs
 def PARALLEL_SPLIT(*args):
     """Start task in parallel.
 
@@ -366,6 +378,7 @@ def PARALLEL_SPLIT(*args):
     return lambda o, e: _parallel_split(o, e, args)
 
 
+@with_nice_docs
 def SYNCHRONIZE(*args, **kwargs):
     """
     After the execution of task B, task C, and task D, task E can be executed.
@@ -409,6 +422,7 @@ def SYNCHRONIZE(*args, **kwargs):
     return _synchronize
 
 
+@with_nice_docs
 def CHOICE(arbiter, *predicates, **kwpredicates):
     """
     A choice is made to execute either task B, task C or task D
@@ -440,13 +454,14 @@ def CHOICE(arbiter, *predicates, **kwpredicates):
     def _exclusive_choice(obj, eng):
         val = arbiter(obj, eng)
         i = mapping[val]  # die on error
-        eng.jumpCallForward(i)
+        eng.jump_call(i)
     c = _exclusive_choice
     c.__name__ = arbiter.__name__
     workflow.insert(0, c)
     return workflow
 
 
+@with_nice_docs
 def SIMPLE_MERGE(*args):
     """
     Task E will be started when any one of the tasks B, C or D completes.
@@ -459,7 +474,6 @@ def SIMPLE_MERGE(*args):
 
     final_task = args[-1]
     workflow = []
-    mapping = {}
     total = ((len(args) - 1) * 2) + 1
     for branch in args[0:-1]:
         total -= 2
